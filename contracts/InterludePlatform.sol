@@ -57,6 +57,7 @@ contract InterludePlatform is Ownable {
     bool public onlyAllowWhitelisted;
 
     address[] public allUsers;
+    uint256 public totalUsers;
     mapping(address => uint256) public spendableTokens;
 
     /* ========== GEMS & CRYSTAL DATA STRUCTURES ========== */
@@ -102,7 +103,13 @@ contract InterludePlatform is Ownable {
     mapping(address => uint256) public unclaimedEarnings;
     mapping(address => uint256) public totalClaimed;
 
-    //Energy system
+    //Distribution system variables
+    bool public distributionInProgress = false;
+    uint256 public nbUserUpdated = 0;
+    uint256 public constant updateBatchSize = 100;
+    uint256 public totalCroToDistribute;
+
+    //Energy system variables
     mapping(address => uint256) public lastTimeEnergyComputed;
     mapping(address => uint256) public generatedEnergy;
     mapping(address => uint256) public collectedEnergy;
@@ -148,11 +155,6 @@ contract InterludePlatform is Ownable {
 
         uint256 tokensToBuy = _calculateTokensToBuy(msg.value);
         require(tokensToBuy > 0, "Not enough CRO to buy tokens");
-
-        if(firstPurchasePhase[msg.sender] == 0){
-            allUsers.push(msg.sender);
-            firstPurchasePhase[msg.sender] = currentPhase();
-        }
 
         if(referralAddress == address(0)){
             referralAddress = msg.sender;
@@ -249,6 +251,21 @@ contract InterludePlatform is Ownable {
         lastTimeEnergyComputed[user] = block.timestamp;
     }
 
+    //used by the game server
+    function collectEnergy(address user) external returns (uint256) {
+        require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
+        
+        //first update the generated energy
+        generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
+        lastTimeEnergyComputed[user] = block.timestamp;
+
+        //then update the collected energy, send it as result to the server.
+        uint256 uncollectedEnergy = generatedEnergy[user] - collectedEnergy[user];
+        collectedEnergy[user] = generatedEnergy[user];
+        emit EnergyCollected(user, uncollectedEnergy);
+        return uncollectedEnergy;
+    }
+
     function calculateUserEarnings(address user) public view returns (uint256) {
         uint256 gemCoef = 1000000 * totalIntInGems / (totalIntInCrystals + totalIntInGems);
         uint256 crystalCoef = 1000000 * totalIntInCrystals / (totalIntInCrystals + totalIntInGems);
@@ -257,10 +274,6 @@ contract InterludePlatform is Ownable {
                     + crystalCoef * currentCrystalPower[user] /  totalCrystalPower) / 1000000;
     }
 
-    bool public distributionInProgress = false;
-    uint256 public nbUserUpdated = 0;
-    uint256 public constant updateBatchSize = 100;
-    uint256 public totalCroToDistribute;
     function initializeUsersEarningsUpdate() external onlyOwner {
         require(!distributionInProgress, "Distribution not completed!");
         distributionInProgress = true;
@@ -288,21 +301,6 @@ contract InterludePlatform is Ownable {
         }
 
         nbUserUpdated = lastUpdateIndex;
-    }
-    
-    //used by the game server
-    function collectEnergy(address user) external returns (uint256) {
-        require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
-        
-        //first update the generated energy
-        generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
-        lastTimeEnergyComputed[user] = block.timestamp;
-
-        //then update the collected energy, send it as result to the server.
-        uint256 uncollectedEnergy = generatedEnergy[user] - collectedEnergy[user];
-        collectedEnergy[user] = generatedEnergy[user];
-        emit EnergyCollected(user, uncollectedEnergy);
-        return uncollectedEnergy;
     }
 
     /* ========== GEMS & CRYSTAL MANAGEMENT ========== */
@@ -429,7 +427,6 @@ contract InterludePlatform is Ownable {
         emit ReferralBonusClaim(msg.sender, croReferralBonus, intReferralBonus);
     }
 
-    // Function to set referral program restriction (only owner can call this)
     function restrictReferralProgram(bool _restricted) external onlyOwner {
         restrictReferralProgramToPartners = _restricted;
     }
@@ -475,11 +472,6 @@ contract InterludePlatform is Ownable {
         return userCrystalsArray;
     }
 
-    // function isWhitelisted(address user) public view returns (bool) {
-    //     return generalWhitelist.isWhitelisted(user);
-    // }
-
-
    /* ========== ADMIN ========== */
 
     function setReferralBonusesPercentages(uint256 _referrerCroBonusPercentage,uint256 _referrerIntBonusPercentage,uint256 _referredIntBonusPercentage) external onlyOwner {
@@ -493,10 +485,6 @@ contract InterludePlatform is Ownable {
 
     function setStartDate(uint256 _startDate) external onlyOwner {
         startDate = _startDate;
-    }
-
-    function setUserAllowance(address user, uint256 amountInCro) external onlyOwner {
-        investmentAllowance[user] = amountInCro * 10**18;
     }
     
     function setOnlyWhitelist(bool _onlyAllowWhitelisted) external onlyOwner {
@@ -552,8 +540,19 @@ contract InterludePlatform is Ownable {
         spendableTokens[user] += amount;
     }
 
+    function giveUnclaimedEarnings(address user, uint256 amount)  public onlyOwner {
+        unclaimedEarnings[user] += amount;
+    }
+
     /* ========== HELPERS ========== */
     function giveToken(address user, uint256 amount) internal{
+        
+        if(firstPurchasePhase[msg.sender] == 0){
+            allUsers.push(msg.sender);
+            totalUsers += 1;
+            firstPurchasePhase[msg.sender] = currentPhase();
+        }
+
         token.transferFrom(ownerWallet, user, amount * 10**18);
         spendableTokens[user] += amount;
     }
