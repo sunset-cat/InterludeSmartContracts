@@ -106,7 +106,7 @@ contract InterludePlatform is Ownable {
     //Distribution system variables
     bool public distributionInProgress = false;
     uint256 public nbUserUpdated = 0;
-    uint256 public constant updateBatchSize = 100;
+    uint256 public constant updateBatchSize = 20;
     uint256 public totalCroToDistribute;
 
     //Energy system variables

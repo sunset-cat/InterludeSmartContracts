@@ -1,5 +1,8 @@
 const { expect } = require("chai");
 
+
+const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+
 describe("Token Contract", function () {
   let Token;
   let token;
@@ -7,6 +10,7 @@ describe("Token Contract", function () {
   const initialSupply = ethers.parseUnits("1000000000", 18); // 1 billion tokens
 
   before(async function () {
+    
       // Get the deployer account
       [deployer] = await ethers.getSigners();
 
@@ -27,6 +31,7 @@ describe("Token Contract", function () {
 });
 
 describe("InterludePlatform", function () {
+    this.timeout(100000);
     let InterludePlatform, interludePlatform, generalWhitelist, token, Token, owner, addr1, addr2, addr3, steps;
     
     const gems = [
@@ -134,6 +139,8 @@ describe("InterludePlatform", function () {
         await token.connect(owner).setSpecialAddress(addr1.address);
         await expect(interludePlatform.connect(addr1).buyToken(owner.address, { value: croAmount })).to.be.reverted;
       });
+    });
+    
     
     describe("General tests", function () {
       it("Buying token only allowed for whitelisted", async function () {
@@ -348,7 +355,6 @@ describe("InterludePlatform", function () {
             const randomCroAmount = BigInt(Math.floor((Math.random() * (2000 - 100) + 100)))
             await buyTokens(addr3, ethers.parseEther(randomCroAmount.toString()));
             accumulatedCro += ethers.parseEther(randomCroAmount.toString())/2n;
-            console.log(randomCroAmount, accumulatedCro, await interludePlatform.accumulatedCro(),'rr');
           }
           for (const user of [owner, addr1, addr2]) {
             await interludePlatform.connect(user).buyGem(0, 1);
@@ -432,8 +438,98 @@ describe("InterludePlatform", function () {
           }
         }
       });
+
+      it("should correctly track user earnings for n users, with non null dilution", async function () {
+        const userPower = {};
+        const userEarnings = {};
+        const userAddresses = [];
+        let accumulatedCro = BigInt(0);
+      
+         // Dynamically create n impersonated signers
+        for (let i = 0; i < 100; i++) {
+          const randomAddress = ethers.Wallet.createRandom().address;
+          const signer = await ethers.getImpersonatedSigner(randomAddress); // Impersonate the address
+          userAddresses.push(signer);
+          userPower[signer.address] = { gemPower: 0n, crystalPower: 0n, mintedCrystal: 0n };
+          userEarnings[signer.address] = { totalEarnings: 0n };
+
+          // Fund the impersonated signer with ETH (required for transactions)
+          await ethers.provider.send("hardhat_setBalance", [
+            randomAddress,
+            ethers.toQuantity(ethers.parseEther("100000")), // 100 ETH for gas and transactions
+          ]);
+        }
+      
+        userPower.totalIntInGems = 1n;
+        userPower.totalIntInCrystals = 1n;
+        userPower.totalCrystalPriceUnits = 1n;
+      
+        // Buy initial tokens for each user
+        const buyTokenAmount = ethers.parseEther("2000");
+        for (const user of userAddresses) {
+          await interludePlatform.connect(user).buyToken(user.address, { value: buyTokenAmount });
+        }
+        accumulatedCro += (buyTokenAmount * BigInt(userAddresses.length)) / 2n;
+      
+        // Initial transactions to populate power
+        for (let i = 0; i < 10; i++) {
+          for (const user of userAddresses) {
+            await buyAsset(user, userPower);
+          }
+        }
+      
+        // Simulation of transactions to trigger earnings
+        for (let j = 0; j < rand(1, 10); j++) {
+          for (let i = 0; i < rand(1, 10); i++) {
+            const randomCroAmount = BigInt(Math.floor(Math.random() * (2000 - 100) + 100));
+            await buyTokens(addr3, ethers.parseEther(randomCroAmount.toString()));
+            accumulatedCro += ethers.parseEther(randomCroAmount.toString()) / 2n;
+          }
+      
+          for (let i = 0; i < rand(1, 20); i++) {
+            for (const user of userAddresses) {
+              if (Math.random() < 0.5) {
+                await sellAsset(user, userPower);
+              }
+              if (Math.random() < 0.5) {
+                await buyAsset(user, userPower);
+              }
+              if (Math.random() < 0.5) {
+                for (let k = 0; k < 6; k++) {
+                  await mintCrystal(user, userPower);
+                }
+              }
+            }
+          }
+      
+          // Check accumulated earnings match
+          const contractAccumulatedCro = await interludePlatform.accumulatedCro();
+          expect(contractAccumulatedCro.toString()).to.equal(accumulatedCro.toString());
+      
+          // Update earnings on the contract
+          await updateEarnings();
+      
+          // Compute earnings locally
+          let totalDistributed = 0n;
+          for (const user of userAddresses) {
+            totalDistributed += await updateUserEarningsLocal(user, accumulatedCro, userEarnings, userPower);
+          }
+          accumulatedCro -= totalDistributed;
+      
+          // Check all values match
+          for (const user of userAddresses) {
+            const contractGemPower = await interludePlatform.currentGemPower(user.address);
+            const contractCrystalPower = await interludePlatform.currentCrystalPower(user.address);
+            expect(contractGemPower.toString()).to.equal(userPower[user.address].gemPower.toString());
+            expect(contractCrystalPower.toString()).to.equal(userPower[user.address].crystalPower.toString());
+      
+            const expectedEarnings = userEarnings[user.address].totalEarnings;
+            const actualEarnings = await interludePlatform.unclaimedEarnings(user.address);
+            expect(actualEarnings.toString()).to.equal(expectedEarnings.toString());
+          }
+        }
+      });
     });
-  });
 
     function calculateTotalPowers(userPower) {
       let totalGemPower = 1n;     
@@ -447,12 +543,26 @@ describe("InterludePlatform", function () {
       return { totalGemPower, totalCrystalPower }; 
     }
 
-    async function updateEarnings(){
-      await interludePlatform.connect(owner).initializeUsersEarningsUpdate();
-      while(await interludePlatform.connect(owner).distributionInProgress()){
-        await interludePlatform.connect(owner).updateAllUsersEarnings();
+    async function updateEarnings() {
+      // Initialize earnings update and track gas cost
+      let tx = await interludePlatform.connect(owner).initializeUsersEarningsUpdate();
+      let receipt = await tx.wait();
+      let gasUsed = receipt.gasUsed; // BigNumber
+      let effectiveGasPrice = ethers.parseUnits("5000", "gwei");
+      let gasCost = gasUsed * effectiveGasPrice; // Multiply BigNumber values
+      console.log(`Gas cost for initializeUsersEarningsUpdate: ${ethers.formatEther(gasCost)} ETH`);
+      console.log(`Gas used for initializeUsersEarningsUpdate:`, gasUsed);
+  
+      // Update earnings while distribution is in progress
+      while (await interludePlatform.connect(owner).distributionInProgress()) {
+          tx = await interludePlatform.connect(owner).updateAllUsersEarnings();
+          receipt = await tx.wait();
+          gasUsed = receipt.gasUsed; // BigNumber
+          gasCost = gasUsed * effectiveGasPrice; // Multiply BigNumber values
+          console.log(`Gas cost for updateAllUsersEarnings: ${ethers.formatEther(gasCost)} ETH`);
+          console.log(`Gas used for initializeUsersEarningsUpdate:`, gasUsed);
       }
-    }
+  } 
 
     function rand(i,j){
       const t=  Math.floor(Math.random() * (j-i)) + i
@@ -462,7 +572,6 @@ describe("InterludePlatform", function () {
     async function updateUserEarningsLocal(user, amount, userEarnings, userPower){
       const croToRedistribute = amount;
       const totals = calculateTotalPowers(userPower);
-      console.log(totals)
       const contractGemPower = await interludePlatform.totalGemPower();
       const contractCrystalPower = await interludePlatform.totalCrystalPower();
 
