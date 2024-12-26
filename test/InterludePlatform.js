@@ -506,8 +506,10 @@ describe("InterludePlatform", function () {
           const contractAccumulatedCro = await interludePlatform.accumulatedCro();
           expect(contractAccumulatedCro.toString()).to.equal(accumulatedCro.toString());
       
-          // Update earnings on the contract
-          await updateEarnings();
+          for (const user of userAddresses) {
+            await interludePlatform.calculateUserEarnings(user.address)
+          }
+          
       
           // Compute earnings locally
           let totalDistributed = 0n;

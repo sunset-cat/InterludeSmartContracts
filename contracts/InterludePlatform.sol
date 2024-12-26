@@ -230,8 +230,8 @@ contract InterludePlatform is Ownable {
         uint256 owed = calculateUserEarnings(msg.sender);
         require(owed > 0, "No CRO owed");
 
-        totalClaimed[msg.sender] += owed;
         lastClaimedAccumulation[msg.sender] = accumulatedCro;
+        totalClaimed[msg.sender] += owed;
         payable(msg.sender).transfer(owed);
 
         emit EarningsClaim(msg.sender, owed);
