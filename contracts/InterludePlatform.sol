@@ -40,7 +40,6 @@ contract Whitelist is IWhitelist {
 
 contract InterludePlatform is Ownable {
 
-    address payable public ownerWallet;
     IWhitelist public adminWhitelist;
 
     /* ========== TOKEN INFO ========== */
@@ -106,7 +105,7 @@ contract InterludePlatform is Ownable {
     //Distribution system variables
     bool public distributionInProgress = false;
     uint256 public nbUserUpdated = 0;
-    uint256 public constant updateBatchSize = 20;
+    uint256 public updateBatchSize = 20;
     uint256 public totalCroToDistribute;
 
     //Energy system variables
@@ -139,8 +138,7 @@ contract InterludePlatform is Ownable {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(address payable _ownerWallet, address tokenAddress) Ownable(_ownerWallet){
-        ownerWallet = _ownerWallet;
+    constructor(address payable _owner, address tokenAddress) Ownable(_owner){
         token = MyPausableToken(tokenAddress);
     }
 
@@ -185,7 +183,7 @@ contract InterludePlatform is Ownable {
         emit TokenPurchase(address(0), msg.sender, tokensToBuy, referrerCroBonus, referrerIntBonus, referredIntBonus);
 
         uint256 croToOwner = msg.value - (croToRedistribute + referrerCroBonus);
-        ownerWallet.transfer(croToOwner);
+        payable(owner()).transfer(croToOwner);
         
         totalInvested[msg.sender] += msg.value;
 
@@ -389,7 +387,7 @@ contract InterludePlatform is Ownable {
     
     //called by the game server
     function mintCrystal(address user, uint256 crystalType, uint256 amount) public {
-        require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == ownerWallet, "Caller is not an admin");
+        require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
         require(crystals[crystalType].power > 0);
         require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
         
@@ -486,6 +484,10 @@ contract InterludePlatform is Ownable {
     function setStartDate(uint256 _startDate) external onlyOwner {
         startDate = _startDate;
     }
+
+    function setUpdateBatchSize(uint256 _updateBatchSize) external onlyOwner {
+        updateBatchSize = _updateBatchSize;
+    }
     
     function setOnlyWhitelist(bool _onlyAllowWhitelisted) external onlyOwner {
         onlyAllowWhitelisted = _onlyAllowWhitelisted;
@@ -532,11 +534,11 @@ contract InterludePlatform is Ownable {
     receive() external payable {}
 
     function flush() external onlyOwner{
-        ownerWallet.transfer(address(this).balance);
+        payable(owner()).transfer(address(this).balance);
     }
 
     function giveTokenTo(address user, uint256 amount)  public onlyOwner {
-        token.transferFrom(ownerWallet, user, amount * 10**18);
+        token.transferFrom(owner(), user, amount * 10**18);
         spendableTokens[user] += amount;
     }
 
@@ -553,12 +555,12 @@ contract InterludePlatform is Ownable {
             firstPurchasePhase[msg.sender] = currentPhase();
         }
 
-        token.transferFrom(ownerWallet, user, amount * 10**18);
+        token.transferFrom(owner(), user, amount * 10**18);
         spendableTokens[user] += amount;
     }
 
     function spendToken(address user, uint256 amount) internal{
-        token.transferFrom(user, ownerWallet, amount * 10**18);
+        token.transferFrom(user, owner(), amount * 10**18);
 
         require(spendableTokens[user] >= amount, "Not enough spendable token.");
         spendableTokens[user] -= amount;

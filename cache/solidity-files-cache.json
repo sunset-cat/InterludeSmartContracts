@@ -307,8 +307,8 @@
       ]
     },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\contracts\\InterludePlatform.sol": {
-      "lastModificationDate": 1734982459001,
-      "contentHash": "19bf5d2e18621c9f83c722d86247acc4",
+      "lastModificationDate": 1735213346804,
+      "contentHash": "d43119ebf0b21875ee8b067515f53ab3",
       "sourceName": "contracts/InterludePlatform.sol",
       "solcConfig": {
         "version": "0.8.28",
