@@ -78,6 +78,7 @@ contract InterludePlatform is Ownable {
     //admin. So we need to keep track of total holdings, and user holdings of each type of asset, at time of each purchase.
 
     uint256 public accumulatedCro  = 0;
+    mapping(address => uint256) public lastClaimedAccumulation;
 
     //Gems are only for non playing investors. Crystals are used by players: they produce energy that is used to unlock new worlds. In 
     //these worlds players find lootchests that contain new crystals. As a result new crystals are minted by the game, and we need to keep 
@@ -102,12 +103,6 @@ contract InterludePlatform is Ownable {
     mapping(address => uint256) public unclaimedEarnings;
     mapping(address => uint256) public totalClaimed;
 
-    //Distribution system variables
-    bool public distributionInProgress = false;
-    uint256 public nbUserUpdated = 0;
-    uint256 public updateBatchSize = 20;
-    uint256 public totalCroToDistribute;
-
     //Energy system variables
     mapping(address => uint256) public lastTimeEnergyComputed;
     mapping(address => uint256) public generatedEnergy;
@@ -131,7 +126,7 @@ contract InterludePlatform is Ownable {
     IWhitelist public generalWhitelist;
 
     /* ========== EVENTS ========== */
-    event TokenPurchase(address indexed from, address indexed to, uint256 value, uint256 referrerCroBonus, uint256 referrerIntBonus, uint256 referredIntBonus);
+    event TokenPurchase(address indexed buyer, uint256 value, uint256 referrerCroBonus, uint256 referrerIntBonus, uint256 referredIntBonus);
     event EarningsClaim(address indexed owner, uint256 amount);
     event ReferralBonusClaim(address indexed owner, uint256 croAmount, uint256 intAmount);
     event EnergyCollected(address indexed owner, uint256 energyAmount);
@@ -149,7 +144,6 @@ contract InterludePlatform is Ownable {
         require(msg.value > 0, "Must send CRO to buy tokens");
         require(!onlyAllowWhitelisted || generalWhitelist.isWhitelisted(msg.sender), "Not on the whitelist!");
         require(block.timestamp > startDate, "Sale is not yet open!");
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
 
         uint256 tokensToBuy = _calculateTokensToBuy(msg.value);
         require(tokensToBuy > 0, "Not enough CRO to buy tokens");
@@ -180,7 +174,7 @@ contract InterludePlatform is Ownable {
         uint256 totalTokens = tokensToBuy + referredIntBonus;
         giveToken(msg.sender, totalTokens);
 
-        emit TokenPurchase(address(0), msg.sender, tokensToBuy, referrerCroBonus, referrerIntBonus, referredIntBonus);
+        emit TokenPurchase(msg.sender, tokensToBuy, referrerCroBonus, referrerIntBonus, referredIntBonus);
 
         uint256 croToOwner = msg.value - (croToRedistribute + referrerCroBonus);
         payable(owner()).transfer(croToOwner);
@@ -233,14 +227,24 @@ contract InterludePlatform is Ownable {
     /* ========== EARNING SYSTEM ========== */
 
     function claimEarnings() external {
-        uint256 owed = unclaimedEarnings[msg.sender];
+        uint256 owed = calculateUserEarnings(msg.sender);
         require(owed > 0, "No CRO owed");
 
-        unclaimedEarnings[msg.sender] = 0;
         totalClaimed[msg.sender] += owed;
+        lastClaimedAccumulation[msg.sender] = accumulatedCro;
         payable(msg.sender).transfer(owed);
 
         emit EarningsClaim(msg.sender, owed);
+    }
+
+    function calculateUserEarnings(address user) public view returns (uint256) {
+        uint256 claimablePortion = accumulatedCro - lastClaimedAccumulation[user];
+        
+        uint256 gemCoef = 1000000 * totalIntInGems / (totalIntInCrystals + totalIntInGems);
+        uint256 crystalCoef = 1000000 * totalIntInCrystals / (totalIntInCrystals + totalIntInGems);
+        
+        return claimablePortion * (gemCoef * currentGemPower[user] /  totalGemPower
+                    + crystalCoef * currentCrystalPower[user] /  totalCrystalPower) / 1000000;
     }
 
     //called whevener user power change (e.g. when buying, selling or finding an asset)
@@ -264,43 +268,6 @@ contract InterludePlatform is Ownable {
         return uncollectedEnergy;
     }
 
-    function calculateUserEarnings(address user) public view returns (uint256) {
-        uint256 gemCoef = 1000000 * totalIntInGems / (totalIntInCrystals + totalIntInGems);
-        uint256 crystalCoef = 1000000 * totalIntInCrystals / (totalIntInCrystals + totalIntInGems);
-        
-        return totalCroToDistribute * (gemCoef * currentGemPower[user] /  totalGemPower
-                    + crystalCoef * currentCrystalPower[user] /  totalCrystalPower) / 1000000;
-    }
-
-    function initializeUsersEarningsUpdate() external onlyOwner {
-        require(!distributionInProgress, "Distribution not completed!");
-        distributionInProgress = true;
-        nbUserUpdated = 0;
-        totalCroToDistribute = accumulatedCro;
-    }
-
-    function updateAllUsersEarnings() external onlyOwner {
-        require(distributionInProgress, "Distribution not initialized!");
-
-        uint256 lastUpdateIndex = 0;
-        if(nbUserUpdated + updateBatchSize >= allUsers.length){
-            lastUpdateIndex = allUsers.length;
-            distributionInProgress = false;
-        }
-        else{
-            lastUpdateIndex = nbUserUpdated + updateBatchSize;
-        }
-
-        for (uint256 i = nbUserUpdated; i < lastUpdateIndex; i++) {
-            address user = allUsers[i];
-            uint256 userEarnings  = calculateUserEarnings(user);  
-            accumulatedCro -= userEarnings;
-            unclaimedEarnings[user] += userEarnings;         
-        }
-
-        nbUserUpdated = lastUpdateIndex;
-    }
-
     /* ========== GEMS & CRYSTAL MANAGEMENT ========== */
 
     //Functions to manage gems and crystals. At each change the user total power will change, so we need to compute
@@ -308,7 +275,6 @@ contract InterludePlatform is Ownable {
     //Gems and crystals are bought/sold by staking/unstaking INT token.
     function buyGem(uint gemType, uint256 amount) external {
         require(gems[gemType].power > 0, "Gem type does not exist");
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
 
         uint256 totalCost = gems[gemType].unscaledPrice * amount;
         uint256 totalPowerAdded = gems[gemType].power * amount;
@@ -327,7 +293,6 @@ contract InterludePlatform is Ownable {
     function sellGem(uint gemType, uint256 amount) external {
         require(gems[gemType].power > 0);
         require(userGems[msg.sender][gemType] >= amount, "Not enough gems to sell");
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
 
         uint256 totalRefund = gems[gemType].unscaledPrice * amount;
         uint256 totalPowerRemoved = gems[gemType].power * amount;
@@ -346,7 +311,6 @@ contract InterludePlatform is Ownable {
 
     function buyCrystal(uint crystalType, uint256 amount) external {
         require(crystals[crystalType].power > 0);
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
         
         updateEnergy(msg.sender);
 
@@ -367,7 +331,6 @@ contract InterludePlatform is Ownable {
     function sellCrystal(uint crystalType, uint256 amount) external {
         require(crystals[crystalType].power > 0);
         require(userCrystals[msg.sender][crystalType] >= amount, "Not enough crystals to sell");
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
 
         updateEnergy(msg.sender);
         
@@ -389,7 +352,6 @@ contract InterludePlatform is Ownable {
     function mintCrystal(address user, uint256 crystalType, uint256 amount) public {
         require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
         require(crystals[crystalType].power > 0);
-        require(!distributionInProgress, "Reward distribution in progress. Please try again later.");
         
         updateEnergy(user);
 
@@ -483,10 +445,6 @@ contract InterludePlatform is Ownable {
 
     function setStartDate(uint256 _startDate) external onlyOwner {
         startDate = _startDate;
-    }
-
-    function setUpdateBatchSize(uint256 _updateBatchSize) external onlyOwner {
-        updateBatchSize = _updateBatchSize;
     }
     
     function setOnlyWhitelist(bool _onlyAllowWhitelisted) external onlyOwner {
