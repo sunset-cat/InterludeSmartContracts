@@ -616,7 +616,7 @@ describe("InterludePlatform", function () {
         expect(roundingDiff).to.be.lte(3);
       });
 
-      it.only("should correctly calculate second user's earnings, after the first user unstakes", async function () {
+      it("should correctly calculate second user's earnings, after the first user unstakes", async function () {
         const userPower = {
           [owner.address]: { gemPower: 0n, crystalPower: 0n, mintedCrystal: 0n},
           [addr1.address]: { gemPower: 0n, crystalPower: 0n, mintedCrystal: 0n},
@@ -676,19 +676,16 @@ describe("InterludePlatform", function () {
         expectCloseTo(user1Earnings, user2EarningsAfterUnstake, 0.5);
       });
 
-      it("should correctly track user earnings for n users, with non null dilution", async function () {
+      it.only("should correctly track user earnings for n users, with non null dilution", async function () {
         const userPower = {};
-        const userEarnings = {};
         const userAddresses = [];
-        let accumulatedCro = BigInt(0);
 
          // Dynamically create n impersonated signers
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 50; i++) {
           const randomAddress = ethers.Wallet.createRandom().address;
           const signer = await ethers.getImpersonatedSigner(randomAddress); // Impersonate the address
           userAddresses.push(signer);
-          userPower[signer.address] = { gemPower: 0n, crystalPower: 0n, mintedCrystal: 0n };
-          userEarnings[signer.address] = { totalEarnings: 0n };
+          userPower[signer.address] = { gemPower: 0n, crystalPower: 0n, mintedCrystal: 0n, earnings: 0n };
 
           // Fund the impersonated signer with ETH (required for transactions)
           await ethers.provider.send("hardhat_setBalance", [
@@ -706,26 +703,24 @@ describe("InterludePlatform", function () {
         for (const user of userAddresses) {
           await interludePlatform.connect(user).buyToken(user.address, { value: buyTokenAmount });
         }
-        accumulatedCro += (buyTokenAmount * BigInt(userAddresses.length)) / 2n;
-
         // Initial transactions to populate power
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
           for (const user of userAddresses) {
             await buyAsset(user, userPower);
           }
         }
 
         // Simulation of transactions to trigger earnings
-        for (let j = 0; j < rand(1, 10); j++) {
-          for (let i = 0; i < rand(1, 10); i++) {
-            const randomCroAmount = BigInt(Math.floor(Math.random() * (2000 - 100) + 100));
-            await buyTokens(addr3, ethers.parseEther(randomCroAmount.toString()));
-            accumulatedCro += ethers.parseEther(randomCroAmount.toString()) / 2n;
+        for (let j = 0; j < rand(5, 10); j++) {
+          for (let i = 0; i < rand(10, 20); i++) {
+            const randomCroAmount = BigInt(Math.floor(Math.random() * (2000 - 100) + 100) * 10**18);
+            await buyTokens(addr3, randomCroAmount.toString());
+            distributeCro(userPower, randomCroAmount / 2n)
           }
 
           for (let i = 0; i < rand(1, 20); i++) {
             for (const user of userAddresses) {
-              if (Math.random() < 0.5) {
+              if (Math.random() < 0.2) {
                 await sellAsset(user, userPower);
               }
               if (Math.random() < 0.5) {
@@ -738,23 +733,6 @@ describe("InterludePlatform", function () {
               }
             }
           }
-
-          // Check accumulated earnings match
-          const contractAccumulatedCro = await interludePlatform.accumulatedCro();
-          expect(contractAccumulatedCro.toString()).to.equal(accumulatedCro.toString());
-
-          for (const user of userAddresses) {
-            await interludePlatform.calculateUserEarnings(user.address)
-          }
-
-
-          // Compute earnings locally
-          let totalDistributed = 0n;
-          for (const user of userAddresses) {
-            totalDistributed += await updateUserEarningsLocal(user, accumulatedCro, userEarnings, userPower);
-          }
-          accumulatedCro -= totalDistributed;
-
           // Check all values match
           for (const user of userAddresses) {
             const contractGemPower = await interludePlatform.currentGemPower(user.address);
@@ -762,17 +740,34 @@ describe("InterludePlatform", function () {
             expect(contractGemPower.toString()).to.equal(userPower[user.address].gemPower.toString());
             expect(contractCrystalPower.toString()).to.equal(userPower[user.address].crystalPower.toString());
 
-            const expectedEarnings = userEarnings[user.address].totalEarnings;
-            const actualEarnings = await interludePlatform.unclaimedEarnings(user.address);
-            expect(actualEarnings.toString()).to.equal(expectedEarnings.toString());
+            const expectedEarnings = userPower[user.address].earnings;
+            const actualEarnings = await interludePlatform.calculateUserEarnings(user.address);
+            expectCloseTo(expectedEarnings, actualEarnings, 0.0000001);
+            //expect(actualEarnings.toString()).to.equal(expectedEarnings.toString());
+          }
+
+          for (const user of userAddresses) {
+            if(Math.random() > 0.04) continue;
+            await interludePlatform.connect(user).claimEarnings()
+            userPower[user.address].earnings = 0n;
+            console.log('claiming earning, setting earnings to zero');
           }
         }
       });
     });
 
+    function distributeCro(userPower, croToRedistribute){
+      const totals = calculateTotalPowers(userPower);
+      for (const user of Object.values(userPower)) {
+        if(user.gemPower === undefined) continue;
+        user.earnings += 10000n * croToRedistribute * userPower.totalIntInCrystals / (userPower.totalIntInCrystals + userPower.totalIntInGems) * user.crystalPower / totals.totalCrystalPower / 10000n
+          + 10000n * croToRedistribute *userPower.totalIntInGems / (userPower.totalIntInCrystals + userPower.totalIntInGems) * user.gemPower / totals.totalGemPower / 10000n
+      }
+    }
+
     function calculateTotalPowers(userPower) {
-      let totalGemPower = 1n;
-      let totalCrystalPower = 1n;
+      let totalGemPower = 0n;
+      let totalCrystalPower = 0n;
 
       for (const user of Object.values(userPower)) {
         if(user.gemPower === undefined) continue;

@@ -307,8 +307,8 @@
       ]
     },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\contracts\\InterludePlatform.sol": {
-      "lastModificationDate": 1735214416163,
-      "contentHash": "7516738bd8118cc9b707be38cfd3d62d",
+      "lastModificationDate": 1735486021379,
+      "contentHash": "ec442015b226789f42c36fe2e1f610ba",
       "sourceName": "contracts/InterludePlatform.sol",
       "solcConfig": {
         "version": "0.8.28",
@@ -337,6 +337,7 @@
       "imports": [
         "@openzeppelin/contracts/access/Ownable.sol",
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "hardhat/console.sol",
         "./ERC20.sol"
       ],
       "versionPragmas": [
@@ -346,6 +347,42 @@
         "IWhitelist",
         "InterludePlatform",
         "Whitelist"
+      ]
+    },
+    "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\hardhat\\console.sol": {
+      "lastModificationDate": 1734984387744,
+      "contentHash": "681c532e816169606d13a5fe8b475074",
+      "sourceName": "hardhat/console.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.4.22 <0.9.0"
+      ],
+      "artifacts": [
+        "console"
       ]
     }
   }

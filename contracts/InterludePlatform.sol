@@ -77,8 +77,6 @@ contract InterludePlatform is Ownable {
     //(the sum of powers of their gems and crystals). In addition there is a variable bonus for crystal holdings that can be changed by the
     //admin. So we need to keep track of total holdings, and user holdings of each type of asset, at time of each purchase.
 
-    uint256 public accumulatedCro  = 0;
-
     //Gems are only for non playing investors. Crystals are used by players: they produce energy that is used to unlock new worlds. In
     //these worlds players find lootchests that contain new crystals. As a result new crystals are minted by the game, and we need to keep
     //track of how many there are vs the amount of INT that is actually staked in crystals to avoid creating new INT.
@@ -89,8 +87,8 @@ contract InterludePlatform is Ownable {
     uint256 public totalGemPower= 0;
     uint256 public totalCrystalPower= 0;
 
-    uint256 public totalIntInGems = 0; //pool of INT staked in gems. equal to totalPriceUnitsInGems
-    uint256 public totalIntInCrystals = 0; //pool of INT staked in crystals.
+    uint256 public totalIntInGems = 1; //pool of INT staked in gems. equal to totalPriceUnitsInGems
+    uint256 public totalIntInCrystals = 1; //pool of INT staked in crystals.
     uint256 public totalPriceUnitsInCrystals = 1; //keeps track of total price units. actual price = INT in pool * crystalPriceUnit / totalPriceUnitsInCrystals
 
     //User specific variables
@@ -172,8 +170,11 @@ contract InterludePlatform is Ownable {
         if(isEligibleForReferral){
 
             referredIntBonus = tokensToBuy * referredIntBonusPercentage / 100;
-            referrerIntBonus = tokensToBuy * referrerIntBonusPercentage / 100;
-            referrerCroBonus = msg.value * referrerCroBonusPercentage / 100;
+
+            if(referralAddress != address(0)){
+                referrerIntBonus = tokensToBuy * referrerIntBonusPercentage / 100;
+                referrerCroBonus = msg.value * referrerCroBonusPercentage / 100;
+            }
 
             unclaimedCroReferralBonus[referralAddress] += referrerCroBonus;
             unclaimedIntReferralBonus[referralAddress] += referrerIntBonus;
@@ -189,13 +190,11 @@ contract InterludePlatform is Ownable {
 
         totalInvested[msg.sender] += msg.value;
 
-        accumulatedCro += croToRedistribute;
-
         console.log("Total INT in gems: ", totalIntInGems);
         console.log("Total INT in crystals: ", totalIntInCrystals);
 
         if (totalIntInGems + totalIntInCrystals > 0) {
-            uint256 gemsCroToRedistribute = croToRedistribute * (totalIntInGems / (totalIntInGems + totalIntInCrystals));
+            uint256 gemsCroToRedistribute = croToRedistribute * totalIntInGems / (totalIntInGems + totalIntInCrystals);
             uint256 crystalsCroToRedistribute = croToRedistribute - gemsCroToRedistribute;
 
             if (totalGemPower > 0) {
@@ -206,6 +205,8 @@ contract InterludePlatform is Ownable {
                 cumulativeRewardPerWeightCrystals += (crystalsCroToRedistribute * 1e18) / totalCrystalPower;
             }
         }
+        
+        console.log("gemsCroToRedistribute: ", totalIntInCrystals);
     }
 
     function _calculateTokensToBuy(uint256 croAmount) internal view returns (uint256) {
@@ -289,6 +290,11 @@ contract InterludePlatform is Ownable {
     function updateEnergyAndReserveEarnings(address user) internal {
         reserveEarnings(user);
 
+        updateEnergy(user);
+    }
+
+    //called whevener user power change (e.g. when buying, selling or finding an asset)
+    function updateEnergy(address user) internal {
         generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
         lastTimeEnergyComputed[user] = block.timestamp;
     }
@@ -298,8 +304,7 @@ contract InterludePlatform is Ownable {
         require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
 
         //first update the generated energy
-        generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
-        lastTimeEnergyComputed[user] = block.timestamp;
+        updateEnergy(user);
 
         //then update the collected energy, send it as result to the server.
         uint256 uncollectedEnergy = generatedEnergy[user] - collectedEnergy[user];
@@ -511,6 +516,10 @@ contract InterludePlatform is Ownable {
         referrerIntBonusPercentage = _referrerIntBonusPercentage;
         require(_referredIntBonusPercentage >= 0 && _referredIntBonusPercentage <= 20, "Value must be between 0 and 20");
         referredIntBonusPercentage = _referredIntBonusPercentage;
+    }
+
+    function setTotalSold(uint256 _totalSold) external onlyOwner {
+        totalSold = _totalSold;
     }
 
     function setStartDate(uint256 _startDate) external onlyOwner {
