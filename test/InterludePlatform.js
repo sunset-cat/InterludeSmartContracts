@@ -494,10 +494,8 @@ describe("InterludePlatform", function () {
               if (Math.random() < 0.5) {
                 await buyAsset(user, userPower);
               }
-              if (Math.random() < 0.5) {
-                for (let k = 0; k < 6; k++) {
-                  await mintCrystal(user, userPower);
-                }
+              if (Math.random() < 0.1) {
+                await mintCrystal(user, userPower);
               }
             }
           }
@@ -653,6 +651,7 @@ describe("InterludePlatform", function () {
           userPower[user.address].gemPower -= BigInt(itemPower);
           userPower.totalIntInGems -= scaledItemCost;
       } else if(itemType === "crystal" && await getCrystalQuantity(crystals.indexOf(item), user) >= itemAmount) {
+          
           await interludePlatform.connect(user).sellCrystal(crystals.indexOf(item), itemAmount);
           userPower[user.address].crystalPower -= BigInt(itemPower);
           userPower.totalIntInCrystals -= scaledItemCost;

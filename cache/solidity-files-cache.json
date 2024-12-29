@@ -307,8 +307,13 @@
       ]
     },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\contracts\\InterludePlatform.sol": {
+<<<<<<< Updated upstream
       "lastModificationDate": 1735214416163,
       "contentHash": "7516738bd8118cc9b707be38cfd3d62d",
+=======
+      "lastModificationDate": 1735491458264,
+      "contentHash": "365d31d7e829317263962e7e381c8723",
+>>>>>>> Stashed changes
       "sourceName": "contracts/InterludePlatform.sol",
       "solcConfig": {
         "version": "0.8.28",

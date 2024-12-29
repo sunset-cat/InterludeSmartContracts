@@ -249,6 +249,9 @@ contract InterludePlatform is Ownable {
 
     //called whevener user power change (e.g. when buying, selling or finding an asset)
     function updateEnergy(address user) internal {
+        if(lastTimeEnergyComputed[user] == 0){
+            lastTimeEnergyComputed[user] = block.timestamp;
+        }
         generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
         lastTimeEnergyComputed[user] = block.timestamp;
     }
@@ -258,8 +261,7 @@ contract InterludePlatform is Ownable {
         require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
         
         //first update the generated energy
-        generatedEnergy[user] += currentCrystalPower[user] * (block.timestamp - lastTimeEnergyComputed[user]);
-        lastTimeEnergyComputed[user] = block.timestamp;
+        updateEnergy(user)
 
         //then update the collected energy, send it as result to the server.
         uint256 uncollectedEnergy = generatedEnergy[user] - collectedEnergy[user];
@@ -283,6 +285,9 @@ contract InterludePlatform is Ownable {
 
         totalIntInGems += totalCost;
         totalGemPower += totalPowerAdded;
+
+        //console.log("Total INT in gems after buy: ", totalIntInGems);
+        //console.log("total cost gem: ", totalCost);
 
         spendToken(msg.sender, totalCost);
 
@@ -322,6 +327,12 @@ contract InterludePlatform is Ownable {
         totalIntInCrystals += totalCost;
         totalCrystalPower += totalPowerUnitsAdded;
 
+        console.log("Bought: ", amount);
+
+        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
+        console.log("total cost crystal: ", totalCost);
+        console.log("total cost crystal unscaled: ", totalPriceUnitsAdded);
+
         spendToken(msg.sender, totalCost);
 
         userCrystals[msg.sender][crystalType] += amount;
@@ -341,7 +352,11 @@ contract InterludePlatform is Ownable {
         totalPriceUnitsInCrystals -= totalPriceUnitsRemoved;
         totalIntInCrystals -= totalRefund;
         totalCrystalPower -= totalPowerUnitsRemoved;
+        console.log("Sold: ", amount);
 
+        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
+        console.log("total cost crystal: ", totalRefund);
+        console.log("total cost crystal unscaled: ", totalPriceUnitsRemoved);
         giveToken(msg.sender, totalRefund);
 
         userCrystals[msg.sender][crystalType] -= amount;
@@ -360,7 +375,9 @@ contract InterludePlatform is Ownable {
 
         totalPriceUnitsInCrystals += totalPriceUnitsAdded;
         totalCrystalPower += totalPowerUnitsAdded;
+        console.log("Minted: ", amount);
 
+        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
         userCrystals[user][crystalType] = userCrystals[user][crystalType] + amount;
         currentCrystalPower[user] += totalPowerUnitsAdded;
     }
@@ -372,7 +389,7 @@ contract InterludePlatform is Ownable {
     //normal eligibility condition (having invested at previous phase)
 
     function claimReferralBonus() external {
-        //require(unclaimedIntReferralBonus[msg.sender] > 0, "No bonus");
+        require(unclaimedIntReferralBonus[msg.sender] > 0, "No bonus");
 
         uint256 intReferralBonus = unclaimedIntReferralBonus[msg.sender];
         unclaimedIntReferralBonus[msg.sender] = 0;
@@ -487,6 +504,12 @@ contract InterludePlatform is Ownable {
             gems[index].power = _power;
             gems[index].unscaledPrice = _unscaledPrice;
         }
+    }
+
+    function reinitializeEnergy(address user) public onlyOwner {
+        collectedEnergy[user] = 0;
+        generatedEnergy[user] = 0; 
+        lastTimeEnergyComputed[user] = block.timestamp;
     }
 
     receive() external payable {}
