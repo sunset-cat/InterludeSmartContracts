@@ -41,44 +41,6 @@
         "MyPausableToken"
       ]
     },
-    "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
-      "lastModificationDate": 1734984842364,
-      "contentHash": "d3c790edc9ccf808a17c5a6cd13614fd",
-      "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
-      "solcConfig": {
-        "version": "0.8.28",
-        "settings": {
-          "evmVersion": "paris",
-          "optimizer": {
-            "enabled": false,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../utils/Context.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.20"
-      ],
-      "artifacts": [
-        "Ownable"
-      ]
-    },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\@openzeppelin\\contracts\\utils\\Pausable.sol": {
       "lastModificationDate": 1734984842377,
       "contentHash": "24e52f6ef3868e6fca664a423140bee9",
@@ -115,6 +77,44 @@
       ],
       "artifacts": [
         "Pausable"
+      ]
+    },
+    "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\@openzeppelin\\contracts\\access\\Ownable.sol": {
+      "lastModificationDate": 1734984842364,
+      "contentHash": "d3c790edc9ccf808a17c5a6cd13614fd",
+      "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../utils/Context.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Ownable"
       ]
     },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\ERC20.sol": {
@@ -307,13 +307,8 @@
       ]
     },
     "C:\\Users\\Utilisateur\\Documents\\SmartContract\\contracts\\InterludePlatform.sol": {
-<<<<<<< Updated upstream
-      "lastModificationDate": 1735214416163,
-      "contentHash": "7516738bd8118cc9b707be38cfd3d62d",
-=======
-      "lastModificationDate": 1735491458264,
-      "contentHash": "365d31d7e829317263962e7e381c8723",
->>>>>>> Stashed changes
+      "lastModificationDate": 1735585326228,
+      "contentHash": "adf59d1271efc6694d45d969e96f5525",
       "sourceName": "contracts/InterludePlatform.sol",
       "solcConfig": {
         "version": "0.8.28",
@@ -342,6 +337,7 @@
       "imports": [
         "@openzeppelin/contracts/access/Ownable.sol",
         "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "hardhat/console.sol",
         "./ERC20.sol"
       ],
       "versionPragmas": [
@@ -351,6 +347,42 @@
         "IWhitelist",
         "InterludePlatform",
         "Whitelist"
+      ]
+    },
+    "C:\\Users\\Utilisateur\\Documents\\SmartContract\\node_modules\\hardhat\\console.sol": {
+      "lastModificationDate": 1734984387744,
+      "contentHash": "681c532e816169606d13a5fe8b475074",
+      "sourceName": "hardhat/console.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.4.22 <0.9.0"
+      ],
+      "artifacts": [
+        "console"
       ]
     }
   }

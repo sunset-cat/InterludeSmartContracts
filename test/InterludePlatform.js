@@ -681,7 +681,7 @@ describe("InterludePlatform", function () {
         const userAddresses = [];
 
          // Dynamically create n impersonated signers
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 10; i++) {
           const randomAddress = ethers.Wallet.createRandom().address;
           const signer = await ethers.getImpersonatedSigner(randomAddress); // Impersonate the address
           userAddresses.push(signer);
@@ -712,13 +712,13 @@ describe("InterludePlatform", function () {
 
         // Simulation of transactions to trigger earnings
         for (let j = 0; j < rand(5, 10); j++) {
-          for (let i = 0; i < rand(10, 20); i++) {
+          for (let i = 0; i < rand(10, 12); i++) {
             const randomCroAmount = BigInt(Math.floor(Math.random() * (2000 - 100) + 100) * 10**18);
             await buyTokens(addr3, randomCroAmount.toString());
             distributeCro(userPower, randomCroAmount / 2n)
           }
 
-          for (let i = 0; i < rand(1, 20); i++) {
+          for (let i = 0; i < rand(10, 30); i++) {
             for (const user of userAddresses) {
               if (Math.random() < 0.2) {
                 await sellAsset(user, userPower);

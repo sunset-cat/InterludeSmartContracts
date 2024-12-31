@@ -95,9 +95,6 @@ contract InterludePlatform is Ownable {
     mapping(address => uint256) public currentGemPower;
     mapping(address => uint256) public currentCrystalPower;
 
-    // uint256 public cumulativeRewardPerWeight;
-    // mapping(address => uint256) public lastClaimedRewardPerWeight;
-
     uint256 public cumulativeRewardPerWeightGems;
     mapping(address => uint256) public lastClaimedRewardPerWeightGems;
     uint256 public cumulativeRewardPerWeightCrystals;
@@ -126,16 +123,18 @@ contract InterludePlatform is Ownable {
     mapping(address => uint256) public totalClaimedCroReferralBonus;
 
 
-    bool public restrictReferralProgramToPartners = false;
+    bool public restrictReferralProgramToPartners = true;
     IWhitelist public partnersWhitelist;
     IWhitelist public generalWhitelist;
 
     /* ========== EVENTS ========== */
     event TokenPurchase(address indexed buyer, uint256 value, uint256 referrerCroBonus, uint256 referrerIntBonus, uint256 referredIntBonus);
-    event EarningsClaim(address indexed owner, uint256 amount);
-    event EarningsReserve(address indexed owner, uint256 amount);
-    event ReferralBonusClaim(address indexed owner, uint256 croAmount, uint256 intAmount);
-    event EnergyCollected(address indexed owner, uint256 energyAmount);
+    event EarningsClaim(address indexed user, uint256 amount);
+    event EarningsReserve(address indexed user, uint256 amount);
+    event ReferralBonusClaim(address indexed user, uint256 croAmount, uint256 intAmount);
+    event EnergyCollected(address indexed user, uint256 energyAmount);
+    event AssetTransaction(address indexed user, bool isCrystal, bool isBuy, uint index, uint quantity);
+    event CrystalMint(address indexed user, uint index, uint quantity);
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -147,12 +146,12 @@ contract InterludePlatform is Ownable {
     //Functions to buy tokens according to the step function bonding curve, with referral bonus.
 
     function buyToken(address referralAddress) external payable {
-        require(msg.value > 0, "Must send CRO to buy tokens");
+        require(msg.value > 0, "Must send CRO");
         require(!onlyAllowWhitelisted || generalWhitelist.isWhitelisted(msg.sender), "Not on the whitelist!");
-        require(block.timestamp > startDate, "Sale is not yet open!");
+        require(block.timestamp > startDate, "Sale is not open!");
 
         uint256 tokensToBuy = _calculateTokensToBuy(msg.value);
-        require(tokensToBuy > 0, "Not enough CRO to buy tokens");
+        require(tokensToBuy > 0, "Not enough CRO");
 
         if(referralAddress == address(0)){
             referralAddress = msg.sender;
@@ -190,9 +189,6 @@ contract InterludePlatform is Ownable {
 
         totalInvested[msg.sender] += msg.value;
 
-        console.log("Total INT in gems: ", totalIntInGems);
-        console.log("Total INT in crystals: ", totalIntInCrystals);
-
         if (totalIntInGems + totalIntInCrystals > 0) {
             uint256 gemsCroToRedistribute = croToRedistribute * totalIntInGems / (totalIntInGems + totalIntInCrystals);
             uint256 crystalsCroToRedistribute = croToRedistribute - gemsCroToRedistribute;
@@ -205,8 +201,6 @@ contract InterludePlatform is Ownable {
                 cumulativeRewardPerWeightCrystals += (crystalsCroToRedistribute * 1e18) / totalCrystalPower;
             }
         }
-        
-        console.log("gemsCroToRedistribute: ", totalIntInCrystals);
     }
 
     function _calculateTokensToBuy(uint256 croAmount) internal view returns (uint256) {
@@ -286,14 +280,14 @@ contract InterludePlatform is Ownable {
         return (unclaimedPartGems + unclaimedPartCrystals) / 1e18;
     }
 
-    //called whevener user power change (e.g. when buying, selling or finding an asset)
+    //called whevener user power changes (e.g. when buying, selling or finding an asset)
     function updateEnergyAndReserveEarnings(address user) internal {
         reserveEarnings(user);
 
         updateEnergy(user);
     }
 
-    //called whevener user power change (e.g. when buying, selling or finding an asset)
+    //called whevener user power changes (e.g. when buying, selling or finding an asset)
     function updateEnergy(address user) internal {
         if(lastTimeEnergyComputed[user] == 0){
             lastTimeEnergyComputed[user] = block.timestamp;
@@ -307,7 +301,7 @@ contract InterludePlatform is Ownable {
         require(adminWhitelist.isWhitelisted(msg.sender) || msg.sender == owner(), "Caller is not an admin");
 
         //first update the generated energy
-        updateEnergy(user)
+        updateEnergy(user);
 
         //then update the collected energy, send it as result to the server.
         uint256 uncollectedEnergy = generatedEnergy[user] - collectedEnergy[user];
@@ -346,6 +340,8 @@ contract InterludePlatform is Ownable {
         if (lastClaimedRewardPerWeightCrystals[msg.sender] == 0) {
             lastClaimedRewardPerWeightCrystals[msg.sender] = cumulativeRewardPerWeightCrystals;
         }
+
+        emit AssetTransaction(msg.sender, false, true, gemType, amount);
     }
 
     function sellGem(uint gemType, uint256 amount) external {
@@ -365,6 +361,8 @@ contract InterludePlatform is Ownable {
 
         userGems[msg.sender][gemType] -= amount;
         currentGemPower[msg.sender] -= totalPowerRemoved;
+
+        emit AssetTransaction(msg.sender, false, false, gemType, amount);
     }
 
     function buyCrystal(uint crystalType, uint256 amount) external {
@@ -381,13 +379,6 @@ contract InterludePlatform is Ownable {
         totalIntInCrystals += totalCost;
         totalCrystalPower += totalPowerUnitsAdded;
 
-
-        console.log("amount: ", amount);
-
-        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
-        console.log("total cost crystal: ", totalCost);
-        console.log("price unit: ", crystals[crystalType].unscaledPrice);
-
         spendToken(msg.sender, totalCost);
 
         userCrystals[msg.sender][crystalType] += amount;
@@ -400,11 +391,13 @@ contract InterludePlatform is Ownable {
         if (lastClaimedRewardPerWeightCrystals[msg.sender] == 0) {
             lastClaimedRewardPerWeightCrystals[msg.sender] = cumulativeRewardPerWeightCrystals;
         }
+
+        emit AssetTransaction(msg.sender, true, true, crystalType, amount);
     }
 
     function sellCrystal(uint crystalType, uint256 amount) external {
         require(crystals[crystalType].power > 0);
-        require(userCrystals[msg.sender][crystalType] >= amount, "Not enough crystals to sell");
+        require(userCrystals[msg.sender][crystalType] >= amount, "Not enough crystals");
         require(amount > 0);
 
         updateEnergyAndReserveEarnings(msg.sender);
@@ -416,15 +409,13 @@ contract InterludePlatform is Ownable {
         totalPriceUnitsInCrystals -= totalPriceUnitsRemoved;
         totalIntInCrystals -= totalRefund;
         totalCrystalPower -= totalPowerUnitsRemoved;
-        console.log("Sold: ", amount);
 
-        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
-        console.log("total cost crystal: ", totalRefund);
-        console.log("total cost crystal unscaled: ", totalPriceUnitsRemoved);
         giveToken(msg.sender, totalRefund);
 
         userCrystals[msg.sender][crystalType] -= amount;
         currentCrystalPower[msg.sender] -= totalPowerUnitsRemoved;
+
+        emit AssetTransaction(msg.sender, true, false, crystalType, amount);
     }
 
     //called by the game server
@@ -440,11 +431,11 @@ contract InterludePlatform is Ownable {
 
         totalPriceUnitsInCrystals += totalPriceUnitsAdded;
         totalCrystalPower += totalPowerUnitsAdded;
-        console.log("Minted: ", amount);
 
-        console.log("Total INT in crystals after buy: ", totalIntInCrystals);
         userCrystals[user][crystalType] = userCrystals[user][crystalType] + amount;
         currentCrystalPower[user] += totalPowerUnitsAdded;
+
+        emit CrystalMint(user, crystalType, amount);
     }
 
     /* ========== REFERRAL PROGRAM ========== */
@@ -458,8 +449,8 @@ contract InterludePlatform is Ownable {
 
         uint256 intReferralBonus = unclaimedIntReferralBonus[msg.sender];
         unclaimedIntReferralBonus[msg.sender] = 0;
-        giveToken(msg.sender, intReferralBonus);
         totalClaimedIntReferralBonus[msg.sender] += intReferralBonus;
+        giveToken(msg.sender, intReferralBonus);
 
         uint256 croReferralBonus = unclaimedCroReferralBonus[msg.sender];
         unclaimedCroReferralBonus[msg.sender] = 0;
