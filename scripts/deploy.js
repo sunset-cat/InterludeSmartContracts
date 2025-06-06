@@ -1,6 +1,6 @@
 const { ethers } = require("hardhat");
 const fs = require('fs');
-const sleepTime = 0;
+const sleepTime = 3000;
 
 async function main() {
     // Constants
@@ -67,7 +67,7 @@ async function main() {
     console.log("Setting total sold");
     await interludePlatform.connect(owner).setTotalSold(41825000,{ nonce: await owner.getNonce() });
     
-    await updateEarnings(interludePlatform, owner);
+    //await updateEarnings(interludePlatform, owner);
     
     //save adresses
     const dic = {};
