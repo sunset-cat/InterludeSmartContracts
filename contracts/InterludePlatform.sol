@@ -505,7 +505,7 @@ contract InterludePlatform is Ownable {
         return userCrystalsArray;
     }
 
-   /* ========== ADMIN ========== */
+   /* ========== ADMIN ========= */
 
     function setReferralBonusesPercentages(uint256 _referrerCroBonusPercentage,uint256 _referrerIntBonusPercentage,uint256 _referredIntBonusPercentage) external onlyOwner {
         require(_referrerCroBonusPercentage >= 0 && _referrerCroBonusPercentage <= 20, "Value must be between 0 and 20");
